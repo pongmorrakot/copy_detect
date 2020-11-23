@@ -1,0 +1,7 @@
+cc_web_video/
+pca_features/
+__pycache__/
+venv/
+weights/
+YFCC100M_pca/
+copy_detect.zip
