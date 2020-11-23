@@ -16,6 +16,8 @@ from networkx.algorithms.dag import dag_longest_path
 from feature_extract import pad_pair
 
 def sim(feature1, feature2):
+    # print(np.shape(feature1))
+    # print(np.shape(feature2))
     feature1, feature2 = pad_pair(feature1, feature2)
     sims = np.dot(feature1, feature2.T)
     score = 0.0

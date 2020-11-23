@@ -8,6 +8,7 @@ from sklearn.metrics import precision_recall_curve
 
 from feature_extract import pad_pair
 from compute import sim, similarities
+from utils import *
 
 label_path = 'cc_web_video.pickle'
 feature_path = '_extracted_features.pickle'
@@ -75,22 +76,22 @@ def evaluate(ground_truth, similarities, positive_labels='ESLMV', all_videos=Fal
     return mAP / len(ground_truth), np.mean(pr, axis=0)[::-1]
 
 
-def eval(refer, query, thres=0):
-    scores = []
-    for r in refer:
-        score = sim(test_feature, r)
-        scores.append(score)
-    index = np.argmax(scores)
-    if scores[index] > thres:
-        return index + 1, scores[index]
-    else:
-        return -1, scores[index]
-
-def correct_class(refer_index, cur_index):
-    for i, r in enumerate(refer_index):
-        if cur_index <= r - 1:
-            return i + 1
-    return -1
+# def eval(refer, query, thres=0):
+#     scores = []
+#     for r in refer:
+#         score = sim(test_feature, r)
+#         scores.append(score)
+#     index = np.argmax(scores)
+#     if scores[index] > thres:
+#         return index + 1, scores[index]
+#     else:
+#         return -1, scores[index]
+#
+# def correct_class(refer_index, cur_index):
+#     for i, r in enumerate(refer_index):
+#         if cur_index <= r - 1:
+#             return i + 1
+#     return -1
 
 def find_max(arr):
     cur_max = 0.
@@ -107,7 +108,7 @@ def retrieve_label(gt, label_index):
             return i
 
 
-def AP_eval(refer, ground_truth, unsorted_sims, positive_labels='ESLMV'):
+def AP_eval(ground_truth, unsorted_sims, positive_labels='ESLMV'):
     # refer: the query video
     # ground_truth: label for each video in the class
     # unsorted_sims: scores of each video in the class
@@ -119,7 +120,7 @@ def AP_eval(refer, ground_truth, unsorted_sims, positive_labels='ESLMV'):
         index = find_max(unsorted_sims)
         label_index, value = unsorted_sims[index]
         # print(str(label_index) + "\t" + str(value))
-        print(ground_truth[retrieve_label(ground_truth, label_index)])
+        # print(ground_truth[retrieve_label(ground_truth, label_index)])
         r += 1
         if ground_truth[retrieve_label(ground_truth, label_index)][1] in positive_labels:
             i += 1
@@ -162,7 +163,7 @@ def generate_refer_rmac():
     if class_index == -1:
         for entry in open(ann_path, "r"):
             items = entry.split()
-            if int(items[0]) is in refer_list:
+            if int(items[0]) in refer_list:
                 refer.append(pickle.load(open(inpath + items[1] + "/" + items[3].split(".")[0]+".pkl", 'rb')))
     with open("rmac_refer_features.pickle", 'wb') as pk_file:
         pickle.dump(refer, pk_file, protocol = 4)
@@ -189,11 +190,11 @@ def load_rmac(class_index=-1, inpath="./pca_features/", ann_path="/home/ubuntu/D
     features = []
     # load pickle files
     for f in f_list:
-        features.append(f_list[0], pickle.load(open(f_list[0], 'rb')))
+        features.append([f[0], pickle.load(open(f[1], 'rb'))])
     # transpose
     final_features = []
     for f in features:
-        final_features.append(np.transpose(f, (0,1)))
+        final_features.append([f[0], np.transpose(f[1], (0,1))])
     return final_features
 
 
@@ -206,14 +207,17 @@ def load_rmac(class_index=-1, inpath="./pca_features/", ann_path="/home/ubuntu/D
 #     print(t.split()[1])
 
 # mAP
-def eval_all():
+def eval_all(model="rmac"):
     print("load data")
     cc_dataset = pickle.load(open('cc_web_video.pickle', 'rb'))
     refer = pickle.load(open('refer_features.pickle', 'rb'))
     num_classes = 24
     mAP = 0.
     for i in range(num_classes):
-        features = load_i3d(i+1)
+        if model == "i3d":
+            features = load_i3d(i+1)
+        elif model == "rmac":
+            features = load_rmac(i+1)
         gt = []
         for t in open("/home/ubuntu/Desktop/CC_WEB_Video/GT/GT_" + str(i+1) + ".rst", "r").readlines():
             truth = t.split()
@@ -232,13 +236,35 @@ def eval_all():
 
         # print(len(scores))
         # print(len(gt))
-        AP = AP_eval(refer[i],gt,scores)
+        AP = AP_eval(gt,scores)
         print("Class " + str(i+1) + "\t" + str(AP))
         mAP += AP
     print("Final score:(not sure if this is how you calculate final score)")
     print(mAP / num_classes)
 
 
+def eval_class(class_index, model="rmac"):
+    cc_dataset = pickle.load(open('cc_web_video/cc_web_video.pickle', 'rb'))
+
+    if model == "rmac":
+        features = load_rmac(class_index=class_index)
+
+    refer_index = cc_dataset['queries'][class_index-1]
+    refer_index = refer_index - int(features[0][0])
+    # print(refer_index)
+
+    refer = features[refer_index]
+    scores = []
+    gt = []
+    for t in open("/home/ubuntu/Desktop/CC_WEB_Video/GT/GT_" + str(class_index) + ".rst", "r").readlines():
+        truth = t.split()
+        gt.append([truth[0], truth[1]])
+    for f in features:
+        scores.append([f[0],sim(refer[1], f[1])])
+    AP = AP_eval(gt,scores)
+    print(AP)
+
+eval_class(2)
 
 
 # inpath= "./pca_features/1/1_4_Y.pkl"
