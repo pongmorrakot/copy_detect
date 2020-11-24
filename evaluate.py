@@ -121,7 +121,7 @@ def AP_eval(ground_truth, unsorted_sims, positive_labels='ESLMV'):
     while unsorted_sims:
         index = find_max(unsorted_sims)
         label_index, value = unsorted_sims[index]
-        print(str(label_index) + "\t" + str(value) + "\t" + str(ground_truth[retrieve_label(ground_truth, label_index)]))
+        # print(str(label_index) + "\t" + str(value) + "\t" + str(ground_truth[retrieve_label(ground_truth, label_index)]))
         r += 1
         if ground_truth[retrieve_label(ground_truth, label_index)][1] in positive_labels:
             i += 1
