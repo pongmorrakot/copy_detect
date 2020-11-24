@@ -248,6 +248,9 @@ def eval_class(class_index, model="rmac"):
 
     if model == "rmac":
         features = load_rmac(class_index=class_index)
+    if model == "i3d":
+        features = load_i3d(class_index=class_index)
+
 
     refer_index = cc_dataset['queries'][class_index-1]
     refer_index = refer_index - int(features[0][0])
@@ -264,7 +267,7 @@ def eval_class(class_index, model="rmac"):
     AP = AP_eval(gt,scores)
     print(AP)
 
-eval_class(2)
+eval_class(1)
 
 
 # inpath= "./pca_features/1/1_4_Y.pkl"
