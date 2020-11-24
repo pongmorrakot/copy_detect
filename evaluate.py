@@ -13,6 +13,8 @@ from utils import *
 label_path = 'cc_web_video.pickle'
 feature_path = '_extracted_features.pickle'
 
+verbose = True
+
 # use for references
 def calculate_similarities(queries, features, metric='euclidean'):
     """
@@ -119,8 +121,7 @@ def AP_eval(ground_truth, unsorted_sims, positive_labels='ESLMV'):
     while unsorted_sims:
         index = find_max(unsorted_sims)
         label_index, value = unsorted_sims[index]
-        # print(str(label_index) + "\t" + str(value))
-        # print(ground_truth[retrieve_label(ground_truth, label_index)])
+        print(str(label_index) + "\t" + str(value) + "\t" + str(ground_truth[retrieve_label(ground_truth, label_index)]))
         r += 1
         if ground_truth[retrieve_label(ground_truth, label_index)][1] in positive_labels:
             i += 1
@@ -157,7 +158,7 @@ def load_i3d(class_index):
 
 def generate_refer_rmac():
     print("load data")
-    cc_dataset = pickle.load(open('cc_web_video.pickle', 'rb'))
+    cc_dataset = pickle.load(open('cc_web_video/cc_web_video.pickle', 'rb'))
     refer_list = cc_dataset['queries']
     refer = []
     if class_index == -1:
@@ -165,7 +166,7 @@ def generate_refer_rmac():
             items = entry.split()
             if int(items[0]) in refer_list:
                 refer.append(pickle.load(open(inpath + items[1] + "/" + items[3].split(".")[0]+".pkl", 'rb')))
-    with open("rmac_refer_features.pickle", 'wb') as pk_file:
+    with open("refer_features.pickle", 'wb') as pk_file:
         pickle.dump(refer, pk_file, protocol = 4)
     print("done")
 
@@ -186,11 +187,16 @@ def load_rmac(class_index=-1, inpath="./pca_features/", ann_path="/home/ubuntu/D
             items = entry.split()
             if str(items[1]) == str(class_index):
                 f_list.append([items[0], inpath + items[1] + "/" + items[3].split(".")[0]+".pkl"])
-
+    if verbose:
+        print("Video to load: %d" % len(f_list))
     features = []
     # load pickle files
     for f in f_list:
         features.append([f[0], pickle.load(open(f[1], 'rb'))])
+        if verbose:
+            print(f)
+    if verbose:
+        print("Feature #: %d " % len(features))
     # transpose
     final_features = []
     for f in features:
@@ -207,67 +213,103 @@ def load_rmac(class_index=-1, inpath="./pca_features/", ann_path="/home/ubuntu/D
 #     print(t.split()[1])
 
 # mAP
-def eval_all(model="rmac"):
-    print("load data")
-    cc_dataset = pickle.load(open('cc_web_video.pickle', 'rb'))
-    refer = pickle.load(open('refer_features.pickle', 'rb'))
-    num_classes = 24
-    mAP = 0.
-    for i in range(num_classes):
-        if model == "i3d":
-            features = load_i3d(i+1)
-        elif model == "rmac":
-            features = load_rmac(i+1)
-        gt = []
-        for t in open("/home/ubuntu/Desktop/CC_WEB_Video/GT/GT_" + str(i+1) + ".rst", "r").readlines():
-            truth = t.split()
-            gt.append([truth[0], truth[1]])
+# def eval_all():
+#     print("load data")
+#     cc_dataset = pickle.load(open('cc_web_video/cc_web_video.pickle', 'rb'))
+#     refer = pickle.load(open('refer_features.pickle', 'rb'))
+#     num_classes = 24
+#     mAP = 0.
+#     for i in range(num_classes):
+#         if model == "i3d":
+#             features = load_i3d(i+1)
+#         elif model == "rmac":
+#             features = load_rmac(i+1)
+#         gt = []
+#         for t in open("/home/ubuntu/Desktop/CC_WEB_Video/GT/GT_" + str(i+1) + ".rst", "r").readlines():
+#             truth = t.split()
+#             gt.append([truth[0], truth[1]])
+#
+#         # print(len(features))
+#         # print(len(gt))
+#         # # check if there is mismatch
+#         for index in range(len(features)):
+#             if str(features[index][0]) != str(gt[index][0]):
+#                 print("Mismatch found at:\t" + features[index][0] + "\t" + gt[index][0])
+#
+#         scores = []
+#         for f in features:
+#             scores.append([f[0],sim(refer[i], f[1])])
+#
+#         # print(len(scores))
+#         # print(len(gt))
+#         AP = AP_eval(gt,scores)
+#         print("Class " + str(i+1) + "\t" + str(AP))
+#         mAP += AP
+#     print("Final score:(not sure if this is how you calculate final score)")
+#     print(mAP / num_classes)
 
-        # print(len(features))
-        # print(len(gt))
-        # # check if there is mismatch
-        for index in range(len(features)):
-            if str(features[index][0]) != str(gt[index][0]):
-                print("Mismatch found at:\t" + features[index][0] + "\t" + gt[index][0])
-
-        scores = []
-        for f in features:
-            scores.append([f[0],sim(refer[i], f[1])])
-
-        # print(len(scores))
-        # print(len(gt))
-        AP = AP_eval(gt,scores)
-        print("Class " + str(i+1) + "\t" + str(AP))
-        mAP += AP
-    print("Final score:(not sure if this is how you calculate final score)")
-    print(mAP / num_classes)
-
-
-def eval_class(class_index, model="rmac"):
-    cc_dataset = pickle.load(open('cc_web_video/cc_web_video.pickle', 'rb'))
-
-    if model == "rmac":
-        features = load_rmac(class_index=class_index)
-    if model == "i3d":
-        features = load_i3d(class_index=class_index)
-
-
-    refer_index = cc_dataset['queries'][class_index-1]
-    refer_index = refer_index - int(features[0][0])
-    # print(refer_index)
+def eval_helper(cc_dataset, class_index, features):
+    q_index = cc_dataset['queries'][class_index-1]
+    refer_index = q_index - 1
+    if verbose:
+        print("Index of Query/reference video: %d %d" % (refer_index, q_index))
 
     refer = features[refer_index]
+    if int(refer[0]) != int(q_index):
+        print("Query Index mismatch:\t%d\t%d" % (int(refer[0]), int(q_index)))
     scores = []
+
     gt = []
+    for t in range(len(features)):
+        gt.append([t+1, 'X'])
     for t in open("/home/ubuntu/Desktop/CC_WEB_Video/GT/GT_" + str(class_index) + ".rst", "r").readlines():
         truth = t.split()
-        gt.append([truth[0], truth[1]])
+        gt[int(truth[0])-1] = [truth[0], truth[1]]
+
     for f in features:
         scores.append([f[0],sim(refer[1], f[1])])
     AP = AP_eval(gt,scores)
-    print(AP)
+    print("Class " + str(class_index) + "\t" + str(AP))
+    return AP
 
-eval_class(1)
+
+def eval_all():
+    mAP = 0.
+    cc_dataset = pickle.load(open('cc_web_video/cc_web_video.pickle', 'rb'))
+    features = load_rmac()
+    if verbose:
+        print("Feature imported: %d" % len(features))
+
+    for i in range(24):
+        class_index = i + 1
+        AP = eval_helper(cc_dataset, class_index, features)
+        mAP += AP
+    print("Final Score: %d" % mAP/24)
+
+
+def eval_class(class_index, all_videos=True):
+    cc_dataset = pickle.load(open('cc_web_video/cc_web_video.pickle', 'rb'))
+
+    if all_videos:
+        features = load_rmac()
+    else:
+        features = load_rmac(class_index)
+    if verbose:
+        print("Feature imported: %d" % len(features))
+
+    AP = eval_helper(cc_dataset, class_index, features)
+    return AP
+
+
+# features = []
+# for i in range(24):
+#     features += load_rmac(i+1)
+#     print(str(i+1) + "\tloaded")
+
+# for i in range(24):
+#     eval_class(i+1)
+
+eval_all()
 
 
 # inpath= "./pca_features/1/1_4_Y.pkl"
