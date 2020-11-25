@@ -121,7 +121,7 @@ def AP_eval(ground_truth, unsorted_sims, positive_labels='ESLMV'):
     while unsorted_sims:
         index = find_max(unsorted_sims)
         label_index, value = unsorted_sims[index]
-        # print(str(label_index) + "\t" + str(value) + "\t" + str(ground_truth[retrieve_label(ground_truth, label_index)]))
+        print(str(label_index) + "\t" + str(value) + "\t" + str(ground_truth[retrieve_label(ground_truth, label_index)]))
         r += 1
         if ground_truth[retrieve_label(ground_truth, label_index)][1] in positive_labels:
             i += 1
@@ -250,24 +250,26 @@ def load_rmac(class_index=-1, inpath="./pca_features/", ann_path="/home/ubuntu/D
 
 def eval_helper(cc_dataset, class_index, features):
     q_index = cc_dataset['queries'][class_index-1]
-    refer_index = q_index - 1
+    # q_index_in_list = q_index - 1
     if verbose:
-        print("Index of Query/reference video: %d %d" % (refer_index, q_index))
+        print("Index of Query/reference video: %d" % (q_index))
 
-    refer = features[refer_index]
-    if int(refer[0]) != int(q_index):
-        print("Query Index mismatch:\t%d\t%d" % (int(refer[0]), int(q_index)))
-    scores = []
+    # refer = features[q_index_in_list]
+    query = features[retrieve_label(features, q_index)]
+    if int(query[0]) != int(q_index):
+        print("Query Index mismatch:\t%d\t%d" % (int(query[0]), int(q_index)))
 
     gt = []
     for t in range(len(features)):
         gt.append([t+1, 'X'])
     for t in open("/home/ubuntu/Desktop/CC_WEB_Video/GT/GT_" + str(class_index) + ".rst", "r").readlines():
         truth = t.split()
-        gt[int(truth[0])-1] = [truth[0], truth[1]]
+        gt[retrieve_label(gt, truth[0])] = [truth[0], truth[1]]
 
+    scores = []
     for f in features:
-        scores.append([f[0],sim(refer[1], f[1])])
+        scores.append([f[0],sim(query[1], f[1])])
+
     AP = AP_eval(gt,scores)
     print("Class " + str(class_index) + "\t" + str(AP))
     return AP
@@ -284,16 +286,13 @@ def eval_all():
         class_index = i + 1
         AP = eval_helper(cc_dataset, class_index, features)
         mAP += AP
-    print("Final Score: %d" % mAP/24)
+    print("Final Score: "+ str(mAP/24))
 
 
-def eval_class(class_index, all_videos=True):
+def eval_class(class_index):
     cc_dataset = pickle.load(open('cc_web_video/cc_web_video.pickle', 'rb'))
 
-    if all_videos:
-        features = load_rmac()
-    else:
-        features = load_rmac(class_index)
+    features = load_rmac()
     if verbose:
         print("Feature imported: %d" % len(features))
 
@@ -309,7 +308,7 @@ def eval_class(class_index, all_videos=True):
 # for i in range(24):
 #     eval_class(i+1)
 
-eval_all()
+eval_class(22)
 
 
 # inpath= "./pca_features/1/1_4_Y.pkl"
