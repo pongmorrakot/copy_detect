@@ -14,6 +14,13 @@ from scipy.spatial.distance import cosine
 from networkx.algorithms.dag import dag_longest_path
 
 from feature_extract import pad_pair
+from visil import visil
+
+if torch.cuda.is_available():
+    dev = "cuda:0"
+else:
+    dev = "cpu"
+device = torch.device(dev)
 
 def sim(feature1, feature2):
     # print(np.shape(feature1))
@@ -27,6 +34,26 @@ def sim(feature1, feature2):
         score += np.max(s)
     sim_score = score / length
     return sim_score
+
+
+# use what ViSiL does
+def sim2(feature1, feature2):
+    # print(np.shape(feature1))
+    # print(np.shape(feature2))
+    vid_sim = visil().to(device)
+
+    feature1, feature2 = pad_pair(feature1, feature2)
+    sims = np.dot(feature1, feature2.T)
+    sims = vid_sim(sims)
+    score = 0.0
+
+    length = len(sims)
+    for s in sims:
+        # print(np.max(s))
+        score += np.max(s)
+    sim_score = score / length
+    return sim_score
+
 
 def similarities(query_features, refer_features):
     """

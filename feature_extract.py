@@ -124,6 +124,7 @@ class Img2Vec():
         # print(np.shape(my_embedding))
         return my_embedding
 
+
 def my_squeeze(arr):
     arr = arr.squeeze(4)
     arr = arr.squeeze(3)
@@ -139,6 +140,7 @@ def pad(arr, max_size):
     output = normalize(target)
     return output
 
+
 def pad_pair(f1, f2):
     x1,y1 = np.shape(f1)
     x2,y2 = np.shape(f2)
@@ -151,50 +153,6 @@ def pad_pair(f1, f2):
     f2 = pad(f2, y_max)
     return f1,f2
 
-# def find_similarity(model, inpath1, inpath2):
-#     q1 = []
-#     q2 = []
-#
-#     for img in os.listdir(inpath1):
-#         q1.append(inpath1 + img)
-#     q1.sort(key = lambda x: x.lower())
-#
-#     for img in os.listdir(inpath2):
-#         q2.append(inpath2 + img)
-#     q2.sort(key = lambda x: x.lower())
-#
-#
-#     f1 = model.run(q1)
-#     f2 = model.run(q2)
-#
-#     # print("Before Normalize")
-#     # print(np.shape(f1))
-#     # print(np.shape(f2))
-#
-#     f1 = my_squeeze(f1)
-#     f2 = my_squeeze(f2)
-#
-#     x1,y1 = np.shape(f1)
-#     x2,y2 = np.shape(f2)
-#     if y2 > y1:
-#         y_max = y2
-#     else:
-#         y_max = y1
-#
-#     f1 = pad(f1, y_max)
-#     f2 = pad(f2, y_max)
-#
-#     # print("After Normalize")
-#     # print(np.shape(f1))
-#     # print(np.shape(f2))
-#
-#     # print("Similarity:")
-#     sim = compute.frame_alignment(f1,f2)
-#     # print(sim)
-#     #
-#     # plt.imshow(simm, cmap='RdBu')
-#     # plt.show()
-#     return sim
 
 def feature_extract(model, inpath):
     q = []
@@ -223,8 +181,7 @@ def vid2vec(model, path, temp_path="./temp/"):
     return feature, feature_num
 
 
-
-def extract_all(vid_path, ann_path = "/home/ubuntu/Desktop/CC_WEB_Video/CC_WEB_Video_List.txt", start_from=1):
+def extract_all(vid_path, ann_path, start_from=1):
     print('Extraction')
     print("Listing video")
     vid_list = []
@@ -292,6 +249,6 @@ def pad_all():
 
 
 vid_path = "/home/ubuntu/Desktop/CC_WEB_Video/video/"
-
-# extract_all(vid_path)
+ann_path = "/home/ubuntu/Desktop/CC_WEB_Video/CC_WEB_Video_List.txt"
+# extract_all(vid_path, ann_path)
 # pad_all()
