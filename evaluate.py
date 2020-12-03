@@ -27,8 +27,9 @@ def find_max(arr):
             max_index = i
     return max_index
 
-def retrieve_label(gt, label_index):
-    for i,g in enumerate(gt):
+# data should be an array with each unit contains 2 elements: index in label files(video_id) and the data itself(ground_truth, feature, whatever)
+def retrieve_label(data, label_index):
+    for i,g in enumerate(data):
         if str(g[0]) == str(label_index):
             return i
 
@@ -161,15 +162,15 @@ def eval_class(class_index, all_videos, model="rmac"):
             features = load_rmac(class_index)
         elif model == "i3d":
             features = load_i3d(class_index)
-            
+
     if verbose:
         print("Feature imported: %d" % len(features))
 
     AP = eval_helper(cc_dataset, class_index, features, all_videos)
     return AP
 
-eval_class(1, False)
-eval_class(1, True)
+# eval_class(1, False)
+# eval_class(1, True)
 
 
 # load a CC_WEB_VIDEO.pickle
