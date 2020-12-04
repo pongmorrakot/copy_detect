@@ -135,9 +135,9 @@ def eval_helper(cc_dataset, class_index, features, all_videos):
 def eval_all(model="rmac"):
     mAP = 0.
     cc_dataset = pickle.load(open(cc_path, 'rb'))
-    if model = "rmac":
+    if model == "rmac":
         features = load_rmac()
-    elif model = "i3d":
+    elif model == "i3d":
         features = load_i3d()
     if verbose:
         print("Feature imported: %d" % len(features))

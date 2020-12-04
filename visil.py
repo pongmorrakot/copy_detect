@@ -6,7 +6,7 @@ from torchvision import transforms, utils
 
 import numpy as np
 
-from evaluate import load_rmac, retrieve_label
+from evaluate import *
 
 if torch.cuda.is_available():
     dev = "cuda:0"
@@ -22,32 +22,32 @@ class visil(nn.Module):
     def __init__(self, pretrained=None):
         # self.size = in_size
         # self.reLU = ) # applied after every Conv2D layer
-
-        self.conv1 = nn.ReLU(nn.Conv2d(2, 32, kernel_size=[3, 3]))
+        super(visil, self).__init__()
+        self.conv1 = nn.Conv2d(2, 32, kernel_size=[3, 3])
         self.mpool1 = nn.MaxPool2d([2, 2], 2)
-        self.conv2 = nn.ReLU(nn.Conv2d(32, 64, kernel_size=[3, 3]))
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=[3, 3])
         self.mpool2 = nn.MaxPool2d([2, 2], 2)
-        self.conv3 = nn.ReLU(nn.Conv2d(64, 128, kernel_size=[3, 3]))
-        self.fconv = tf.Conv2d(128, 1, kernel_size=[1, 1])
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=[3, 3])
+        self.fconv = nn.Conv2d(128, 1, kernel_size=[1, 1])
 
         if os.path.exists(pretrained):
             self.load_state_dict(torch.load(pretrained))
 
     def forward(self, x):
-        x = self.conv1(x)
+        x = nn.ReLU(self.conv1(x))
         x = self.mpool1(x)
-        x = self.conv2(x)
+        x = nn.ReLU(self.conv2(x))
         x = self.mpool2(x)
-        x = self.conv3(x)
+        x = nn.ReLU(self.conv3(x))
         x = self.fconv(x)
         return x
 
 
-def triplet_generator_cc(class_index=-1, label_path, gt_path):
+def triplet_generator_cc(class_index=-1):
     triplets = []
 
     gt = []
-    if class_index = -1:
+    if class_index == -1:
         for i in range(24):
             for t in open(gt_path +"GT_" + str(i+1) + ".rst", "r").readlines():
                 truth = t.split()
@@ -72,13 +72,14 @@ def triplet_generator_cc(class_index=-1, label_path, gt_path):
                 anchor = features[retrieve_label(features, p)]
                 positive = features[retrieve_label(features, q)]
                 negative = features[retrieve_label(features, r)]
+                print([anchor, positive, negative])
                 triplets.append([anchor, positive, negative])
     return triplets
 
 
 class FeatureDataset(Dataset):
     def __init__(self):
-        self.features = triplet_generator_cc()
+        self.features = triplet_generator_cc(1)
 
     def __getitem__(self, index):
         anchor, positive, negative = self.features[index]
@@ -95,7 +96,7 @@ def triplet_loss(model, anchor, positive, negative, margin=1.0):
     pos_sim = model(pos_sim)
     neg_sim = model(neg_sim)
     loss = pos_sim - neg_sim + margin
-    if loss < 0.
+    if loss < 0.:
         loss = 0.
     return loss
 
@@ -116,12 +117,13 @@ def similarity_regularization_loss(sim, lower_limit=-1., upper_limit=1.):
 #     return loss
 
 def train_visil(model, dataset, loss_func=nn.TripletMarginLoss(), lr=0.001, epochs=20, batch_size=8):
+    print("ViSiL Training")
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
     optimizer = optim.SGD(net.parameters(), lr=lr)
     for epoch in range(epochs):
         for i, batch in enumerate(data_loader):
             anchor, positive, negative = batch
-
+            
             # zero the parameter gradients
             optimizer.zero_grad()
 
@@ -136,6 +138,6 @@ def train_visil(model, dataset, loss_func=nn.TripletMarginLoss(), lr=0.001, epoc
                 print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 2000))
                 running_loss = 0.0
 
-model = visil(weight_path)
+model = visil(pretrained=weight_path)
 dataset = FeatureDataset()
 train_visil = (model, dataset)
