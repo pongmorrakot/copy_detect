@@ -96,7 +96,7 @@ def load_rmac(class_index=-1, inpath=rmac_feature_path, ann_path=ann_path):
     # transpose
     final_features = []
     for f in features:
-        final_features.append([f[0], np.transpose(f[1], (0,1))])
+        final_features.append([f[0], f[1]])
     return final_features
 
 
@@ -134,7 +134,7 @@ def eval_helper(cc_dataset, class_index, features, all_videos):
 
 def eval_all(model="rmac"):
     mAP = 0.
-    cc_dataset = pickle.load(open(cc_path, 'rb'))
+    cc_dataset = pickle.load(open(label_path, 'rb'))
     if model == "rmac":
         features = load_rmac()
     elif model == "i3d":
@@ -150,7 +150,7 @@ def eval_all(model="rmac"):
 
 
 def eval_class(class_index, all_videos, model="rmac"):
-    cc_dataset = pickle.load(open(cc_path, 'rb'))
+    cc_dataset = pickle.load(open(label_path, 'rb'))
 
     if all_videos:
         if model == "rmac":

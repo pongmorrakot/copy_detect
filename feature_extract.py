@@ -66,17 +66,7 @@ class QRDataset(Dataset):
         return len(self.img_path)
 
 
-def normalize(x, copy = False):
-    """
-    A helper function that wraps the function of the same name in sklearn.
-    This helper handles the case of a single column vector.
-    """
-    if type(x) == np.ndarray and len(x.shape) == 1:
-        return np.squeeze(sknormalize(x.reshape(1, -1), copy = copy))
-        #return np.squeeze(x / np.sqrt((x ** 2).sum(-1))[..., np.newaxis])
-    else:
-        return sknormalize(x, copy = copy)
-        #return x / np.sqrt((x ** 2).sum(-1))[..., np.newaxis]
+
 
 
 class Img2Vec():
@@ -130,16 +120,6 @@ def my_squeeze(arr):
     arr = arr.squeeze(3)
     arr = arr.squeeze(0)
     return arr
-
-def pad(arr, max_size):
-    x,y = np.shape(arr)
-    target = np.zeros((x, max_size))
-    # # print(np.shape(target))
-    # # print(np.shape(target[:,:y]))
-    target[:,:y] = arr
-    output = normalize(target)
-    return output
-
 
 def pad_pair(f1, f2):
     x1,y1 = np.shape(f1)
