@@ -57,7 +57,7 @@ class visil(nn.Module):
         x = self.fconv(x)
         return x
 
-    def save_model():
+    def save_model(self):
         torch.save(self.state_dict(), self.weight_path)
         print("weight Saved")
 
@@ -68,7 +68,7 @@ def triplet_generator_cc(class_index=-1):
     gt = []
     if class_index == -1:
         for i in range(24):
-            for t in open(gt_path +"GT_" + str(i+1) + ".rst", "r").readlines():
+            for t in open(gt_path +"GT_" + str(i+1) + ".rst", "positionalr").readlines():
                 truth = t.split()
                 gt.append([truth[0], truth[1]])
     else:
