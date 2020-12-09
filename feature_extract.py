@@ -66,7 +66,17 @@ class QRDataset(Dataset):
         return len(self.img_path)
 
 
-
+def normalize(x, copy = False):
+    """
+    A helper function that wraps the function of the same name in sklearn.
+    This helper handles the case of a single column vector.
+    """
+    if type(x) == np.ndarray and len(x.shape) == 1:
+        return np.squeeze(sknormalize(x.reshape(1, -1), copy = copy))
+        #return np.squeeze(x / np.sqrt((x ** 2).sum(-1))[..., np.newaxis])
+    else:
+        return sknormalize(x, copy = copy)
+        #return x / np.sqrt((x ** 2).sum(-1))[..., np.newaxis]
 
 
 class Img2Vec():

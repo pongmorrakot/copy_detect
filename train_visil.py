@@ -52,7 +52,7 @@ def pick_hard_negative(anchor, negatives, features):
     best_sim = 1.0
     for n in negatives:
         cur_neg = features[retrieve_label(features, n)]
-        cur_sim = sim(anchor, neg_feature)
+        cur_sim = sim(anchor[1], cur_neg[1])
         print(str(cur_sim) + "\t" + str(best_sim))
         if best_sim > cur_sim:
             best_sim = cur_sim
