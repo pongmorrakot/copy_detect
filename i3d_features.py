@@ -39,6 +39,180 @@ else:
 device = torch.device(dev)
 
 
+class LearnedPositionalEmbedding(nn.Module):
+    def __init__(self, d_model, max_len=512):
+        super().__init__()
+
+        # Compute the positional encodings once in log space.
+        pe = torch.zeros(max_len, d_model).float().to(device='cuda')
+        pe.require_grad = True
+        pe = pe.unsqueeze(0)
+        self.pe=nn.Parameter(pe)
+        torch.nn.init.normal_(self.pe,std = d_model ** -0.5)
+
+    def forward(self, x):
+        return self.pe[:, :x.size(1)]
+
+
+class BERTEmbedding3(nn.Module):
+    """
+    BERT Embedding which is consisted with under features
+        1. PositionalEmbedding : adding positional information using sin, cos
+        sum of all these features are output of BERTEmbedding
+    """
+
+    def __init__(self, input_dim, max_len, dropout=0.1):
+        """
+        :param vocab_size: total vocab size
+        :param embed_size: embedding size of token embedding
+        :param dropout: dropout rate
+        """
+        super().__init__()
+        self.learnedPosition = LearnedPositionalEmbedding(d_model=input_dim,max_len=max_len)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, sequence):
+        x = self.learnedPosition(sequence)+sequence
+        return self.dropout(x)
+
+
+class Attention(nn.Module):
+    """
+    Compute 'Scaled Dot Product Attention
+    """
+
+    def forward(self, query, key, value, mask=None, dropout=None):
+        scores = torch.matmul(query, key.transpose(-2, -1)) \
+                 / math.sqrt(query.size(-1))
+
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+
+        p_attn = F.softmax(scores, dim=-1)
+
+        if dropout is not None:
+            p_attn = dropout(p_attn)
+
+        return torch.matmul(p_attn, value), p_attn
+
+
+class MultiHeadedAttention(nn.Module):
+    """
+    Take in model size and number of heads.
+    """
+
+    def __init__(self, h, d_model, dropout=0.1):
+        super().__init__()
+        assert d_model % h == 0
+
+        # We assume d_v always equals d_k
+        self.d_k = d_model // h
+        self.h = h
+
+        self.linear_layers = nn.ModuleList([nn.Linear(d_model, d_model) for _ in range(3)])
+        self.output_linear = nn.Linear(d_model, d_model)
+        self.attention = Attention()
+
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, query, key, value, mask=None):
+        batch_size = query.size(0)
+
+        # 1) Do all the linear projections in batch from d_model => h x d_k
+        query, key, value = [l(x).view(batch_size, -1, self.h, self.d_k).transpose(1, 2)
+                             for l, x in zip(self.linear_layers, (query, key, value))]
+
+        # 2) Apply attention on all the projected vectors in batch.
+        x, attn = self.attention(query, key, value, mask=mask, dropout=self.dropout)
+
+        # 3) "Concat" using a view and apply a final linear.
+        x = x.transpose(1, 2).contiguous().view(batch_size, -1, self.h * self.d_k)
+
+        return self.output_linear(x)
+
+
+class GELU(nn.Module):
+    """
+    Paper Section 3.4, last paragraph notice that BERT used the GELU instead of RELU
+    """
+
+    def forward(self, x):
+        return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
+
+
+class PositionwiseFeedForward(nn.Module):
+    "Implements FFN equation."
+
+    def __init__(self, d_model, d_ff, dropout=0.1):
+        super(PositionwiseFeedForward, self).__init__()
+        self.w_1 = nn.Linear(d_model, d_ff)
+        self.w_2 = nn.Linear(d_ff, d_model)
+        self.dropout = nn.Dropout(dropout)
+        self.activation = GELU()
+
+    def forward(self, x):
+        return self.w_2(self.dropout(self.activation(self.w_1(x))))
+
+
+class LayerNorm(nn.Module):
+    "Construct a layernorm module (See citation for details)."
+
+    def __init__(self, features, eps=1e-6):
+        super(LayerNorm, self).__init__()
+        self.a_2 = nn.Parameter(torch.ones(features))
+        self.b_2 = nn.Parameter(torch.zeros(features))
+        self.eps = eps
+
+    def forward(self, x):
+        mean = x.mean(-1, keepdim=True)
+        std = x.std(-1, keepdim=True)
+        return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
+
+
+
+class SublayerConnection(nn.Module):
+    """
+    A residual connection followed by a layer norm.
+    Note for code simplicity the norm is first as opposed to last.
+    """
+
+    def __init__(self, size, dropout):
+        super(SublayerConnection, self).__init__()
+        self.norm = LayerNorm(size)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, sublayer):
+        "Apply residual connection to any sublayer with the same size."
+        return x + self.dropout(sublayer(self.norm(x)))
+
+
+class TransformerBlock(nn.Module):
+    """
+    Bidirectional Encoder = Transformer (self-attention)
+    Transformer = MultiHead_Attention + Feed_Forward with sublayer connection
+    """
+
+    def __init__(self, hidden, attn_heads, feed_forward_hidden, dropout):
+        """
+        :param hidden: hidden size of transformer
+        :param attn_heads: head sizes of multi-head attention
+        :param feed_forward_hidden: feed_forward_hidden, usually 4*hidden_size
+        :param dropout: dropout rate
+        """
+
+        super().__init__()
+        self.attention = MultiHeadedAttention(h=attn_heads, d_model=hidden)
+        self.feed_forward = PositionwiseFeedForward(d_model=hidden, d_ff=feed_forward_hidden, dropout=dropout)
+        self.input_sublayer = SublayerConnection(size=hidden, dropout=dropout)
+        self.output_sublayer = SublayerConnection(size=hidden, dropout=dropout)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x, mask):
+        x = self.input_sublayer(x, lambda _x: self.attention.forward(_x, _x, _x, mask=mask))
+        x = self.output_sublayer(x, self.feed_forward)
+        return self.dropout(x)
+
+
 class BERT2(nn.Module):
     """
     BERT model : Bidirectional Encoder Representations from Transformers.
@@ -480,13 +654,13 @@ class rgb_I3D64f(nn.Module):
 
 
 class rgb_I3D64f_bert2(nn.Module):
-    def __init__(self, num_classes , length, modelPath=''):
+    def __init__(self, modelPath='./weights/rgb_imagenet.pth'):
         super(rgb_I3D64f_bert2, self).__init__()
         self.hidden_size=1024
         self.n_layers=1
         self.attn_heads=8
-        self.num_classes=num_classes
-        self.length=length
+        # self.num_classes=num_classes
+        # self.length=length
         self.dp = nn.Dropout(p=0.8)
 
 
@@ -498,11 +672,11 @@ class rgb_I3D64f_bert2(nn.Module):
 
         self.bert = BERT2(self.hidden_size, 8 , hidden=self.hidden_size, n_layers=self.n_layers, attn_heads=self.attn_heads)
         print(sum(p.numel() for p in self.bert.parameters() if p.requires_grad))
-        self.fc_action = nn.Linear(self.hidden_size, num_classes)
+        # self.fc_action = nn.Linear(self.hidden_size, num_classes)
         self.avgpool = nn.AdaptiveAvgPool3d(output_size=(8, 1, 1))
 
-        torch.nn.init.xavier_uniform_(self.fc_action.weight)
-        self.fc_action.bias.data.zero_()
+        # torch.nn.init.xavier_uniform_(self.fc_action.weight)
+        # self.fc_action.bias.data.zero_()
 
     def forward(self, x):
         # print('input\t' + str(np.shape(x)))
@@ -566,9 +740,12 @@ def normalize(x, copy = False):
 
 
 def my_squeeze(arr):
-    arr = arr.squeeze(4)
-    arr = arr.squeeze(3)
-    arr = arr.squeeze(0)
+    print(np.shape(arr))
+    # arr = arr.squeeze(4)
+    # arr = arr.squeeze(3)
+    # arr = arr.squeeze(0)
+    arr = arr.squeeze()
+    print(np.shape(arr))
     return arr
 
 
@@ -579,7 +756,7 @@ class Img2Vec():
             self.model = rgb_I3D64f().to(device)
         elif model == "vgg16":
             self.model = vgg.vgg16.to(device)
-        elif  model == "bert"
+        elif  model == "bert":
             self.model = rgb_I3D64f_bert2().to(device)
             # take the bottom layer out
         else:
@@ -659,7 +836,7 @@ def vid2vec(model, path, temp_path="./temp/"):
 print(sys.argv)
 script_name, weight_path, inpath, outpath = sys.argv
 
-img2vec = Img2Vec(model="i3d")
+img2vec = Img2Vec(model="bert")
 feature, feature_num = vid2vec(img2vec, inpath)
 with open(outpath, 'wb') as pk_file:
     pickle.dump(feature, pk_file, protocol = 4)
