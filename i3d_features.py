@@ -39,6 +39,82 @@ else:
 device = torch.device(dev)
 
 
+class BERT2(nn.Module):
+    """
+    BERT model : Bidirectional Encoder Representations from Transformers.
+    """
+
+    def __init__(self, input_dim, max_len, hidden=768, n_layers=12, attn_heads=12, dropout=0.1, mask_prob=0.8):
+        """
+        :param vocab_size: vocab_size of total words
+        :param hidden: BERT model hidden size
+        :param n_layers: numbers of Transformer blocks(layers)
+        :param attn_heads: number of attention heads
+        :param dropout: dropout rate
+        """
+
+        super().__init__()
+        self.hidden = hidden
+        self.n_layers = n_layers
+        self.attn_heads = attn_heads
+        self.max_len=max_len
+        self.input_dim=input_dim
+        self.mask_prob=mask_prob
+
+
+        clsToken = torch.zeros(1,1,self.input_dim).float().cuda()
+        clsToken.require_grad = True
+        self.clsToken= nn.Parameter(clsToken)
+        torch.nn.init.normal_(self.clsToken, std = hidden ** -0.5)
+
+
+
+        # paper noted they used 4*hidden_size for ff_network_hidden_size
+        self.feed_forward_hidden = hidden * 4
+
+        # embedding for BERT, sum of positional, segment, token embeddings
+        self.embedding = BERTEmbedding3(input_dim=input_dim, max_len=max_len+1)
+
+        # multi-layers transformer blocks, deep network
+        self.transformer_blocks = nn.ModuleList(
+            [TransformerBlock(hidden, attn_heads, self.feed_forward_hidden, dropout) for _ in range(n_layers)])
+
+        for module in self.modules():
+            if isinstance(module, nn.Embedding):
+                #nn.init.normal_(module.weight, mean=0, std=0.02)
+                nn.init.uniform_(module.weight, -0.06, 0.06)
+            if isinstance(module, nn.Linear):
+                nn.init.normal_(module.weight, mean=0, std=0.02)
+                if hasattr(module, "bias") and module.bias is not None:
+                    nn.init.constant_(module.bias, 0.0)
+            if isinstance(module, nn.LayerNorm):
+                module.bias.data.zero_()
+                module.weight.data.fill_(1.0)
+
+    def forward(self, input_vectors):
+        # attention masking for padded token
+        # torch.ByteTensor([batch_size, 1, seq_len, seq_len)
+        batch_size=input_vectors.shape[0]
+        sample=None
+        if self.training:
+            bernolliMatrix=torch.cat((torch.tensor([1]).float().cuda(), (torch.tensor([self.mask_prob]).float().cuda()).repeat(self.max_len)), 0).unsqueeze(0).repeat([batch_size,1])
+            self.bernolliDistributor=torch.distributions.Bernoulli(bernolliMatrix)
+            sample=self.bernolliDistributor.sample()
+            mask = (sample > 0).unsqueeze(1).repeat(1, sample.size(1), 1).unsqueeze(1)
+        else:
+            mask=torch.ones(batch_size,1,self.max_len+1,self.max_len+1).cuda()
+
+        # embedding the indexed sequence to sequence of vectors
+        x = torch.cat((self.clsToken.repeat(batch_size,1,1),input_vectors),1)
+        x = self.embedding(x)
+
+        # running over multiple transformer blocks
+        for transformer in self.transformer_blocks:
+            x = transformer.forward(x, mask)
+
+        return x, sample
+
+
 class MaxPool3dSamePadding(nn.MaxPool3d):
 
     def compute_pad(self, dim, s):
@@ -429,27 +505,28 @@ class rgb_I3D64f_bert2(nn.Module):
         self.fc_action.bias.data.zero_()
 
     def forward(self, x):
-        print('input\t' + str(np.shape(x)))
+        # print('input\t' + str(np.shape(x)))
         x = self.features(x)
-        print('feature extracted\t' + str(np.shape(x)))
+        # print('feature extracted\t' + str(np.shape(x)))
         x = self.avgpool(x)
-        print('average pooled\t' + str(np.shape(x)))
+        # print('average pooled\t' + str(np.shape(x)))
         x = x.view(x.size(0), self.hidden_size,8)
         x = x.transpose(1,2)
         norm = x.norm(p=2, dim = -1, keepdim=True)
         x = x.div(norm)
         input_vectors=x
-        print('transformed\t' + str(np.shape(x)))
+        # print('transformed\t' + str(np.shape(x)))
         output , maskSample = self.bert(x)
-        print('BERTed\t' + str(np.shape(output)))
-        classificationOut = output[:,0,:]
+        # print('BERTed\t' + str(np.shape(output)))
+        # classificationOut = output[:,0,:]
         sequenceOut=output[:,1:,:]
-        output=self.dp(classificationOut)
-        print('BERTed2\t' + str(np.shape(output)))
-        x = self.fc_action(output)
-        print('output\t' + str(np.shape(x)))
+        # output=self.dp(classificationOut)
+        # print('BERTed2\t' + str(np.shape(output)))
+        # x = self.fc_action(output)
+        # print('output\t' + str(np.shape(x)))
         # print(np.shape(x))
-        return x, input_vectors, sequenceOut, maskSample
+        # return x, input_vectors, sequenceOut, maskSample
+        return sequenceOut
 
 
 class QRDataset(Dataset):
@@ -502,6 +579,8 @@ class Img2Vec():
             self.model = rgb_I3D64f().to(device)
         elif model == "vgg16":
             self.model = vgg.vgg16.to(device)
+        elif  model == "bert"
+            self.model = rgb_I3D64f_bert2().to(device)
             # take the bottom layer out
         else:
             print("What")
