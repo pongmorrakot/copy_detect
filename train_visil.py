@@ -13,7 +13,7 @@ triplet_path = "./triplets.pickle"
 label_path = "cc_web_video/cc_web_video.pickle"
 weight_path = "./visil.weight"
 
-
+# TODO:
 def triplet_generator_cc():
     triplets = []
     pos = []
@@ -107,7 +107,7 @@ def triplet_loss(model, anchor, positive, negative, margin=1.0):
     return loss
 
 
-def train_visil(model, dataset, loss_func=triplet_loss, lr=0.001, epochs=20, batch_size=8):
+def train(model, dataset, loss_func=triplet_loss, lr=0.001, epochs=20, batch_size=8):
     print("ViSiL Training")
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
     optimizer = optim.SGD(model.parameters(), lr=lr)
@@ -133,4 +133,4 @@ def train_visil(model, dataset, loss_func=triplet_loss, lr=0.001, epochs=20, bat
 
 model = visil(weight_path).to(device)
 dataset = FeatureDataset()
-train_visil(model, dataset)
+train(model, dataset)

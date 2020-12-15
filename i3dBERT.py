@@ -1,42 +1,9 @@
-import re
-import os, sys, codecs
-import subprocess
-import math
-import shutil
 import torch
-import numpy as np
-import matplotlib.pyplot as plt
-import glob
-import pandas as pd
-import pickle
-from PIL import Image
-from tqdm.notebook import tqdm
-#import tqdm
-import cv2
-from sklearn.preprocessing import normalize as sknormalize
-from sklearn.decomposition import PCA
-
-torch.manual_seed(0)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-
-import torchvision.models as models
-import torchvision.transforms as transforms
-import torchvision.datasets as datasets
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
-from torch.autograd import Variable
-from torch.utils.data.dataset import Dataset
 
-# take from i3d.py and feature_extract.py into one file
+import numpy as np
 
-
-if torch.cuda.is_available():
-    dev = "cuda:0"
-else:
-    dev = "cpu"
-device = torch.device(dev)
 
 
 class LearnedPositionalEmbedding(nn.Module):
@@ -654,8 +621,10 @@ class rgb_I3D64f(nn.Module):
 
 
 class rgb_I3D64f_bert2(nn.Module):
-    def __init__(self, modelPath='./weights/rgb_imagenet.pth'):
+    def __init__(self, modelPath='./weights/rgb_imagenet.pth', extract=True):
         super(rgb_I3D64f_bert2, self).__init__()
+        self.extract = True
+        self.eval = True
         self.hidden_size=1024
         self.n_layers=1
         self.attn_heads=8
@@ -672,11 +641,14 @@ class rgb_I3D64f_bert2(nn.Module):
 
         self.bert = BERT2(self.hidden_size, 8 , hidden=self.hidden_size, n_layers=self.n_layers, attn_heads=self.attn_heads)
         print(sum(p.numel() for p in self.bert.parameters() if p.requires_grad))
-        # self.fc_action = nn.Linear(self.hidden_size, num_classes)
+        #
         self.avgpool = nn.AdaptiveAvgPool3d(output_size=(8, 1, 1))
 
-        # torch.nn.init.xavier_uniform_(self.fc_action.weight)
-        # self.fc_action.bias.data.zero_()
+        # used for classification task only
+        if self.train:
+            self.fc_action = nn.Linear(self.hidden_size, num_classes)
+            torch.nn.init.xavier_uniform_(self.fc_action.weight)
+            self.fc_action.bias.data.zero_()
 
     def forward(self, x):
         # print('input\t' + str(np.shape(x)))
@@ -692,151 +664,24 @@ class rgb_I3D64f_bert2(nn.Module):
         # print('transformed\t' + str(np.shape(x)))
         output , maskSample = self.bert(x)
         # print('BERTed\t' + str(np.shape(output)))
-        # classificationOut = output[:,0,:]
+
         sequenceOut=output[:,1:,:]
-        # output=self.dp(classificationOut)
-        # print('BERTed2\t' + str(np.shape(output)))
-        # x = self.fc_action(output)
-        # print('output\t' + str(np.shape(x)))
-        # print(np.shape(x))
-        # return x, input_vectors, sequenceOut, maskSample
-        return sequenceOut
-
-
-class QRDataset(Dataset):
-    def __init__(self, img_path, transform = None):
-        self.img_path = img_path
-
-        self.img_label = np.zeros(len(img_path))
-
-        if transform is not None:
-            self.transform = transform
+        if self.extract:
+            return sequenceOut
         else:
-            self.transform = None
+            classificationOut = output[:,0,:]
+            if eval:
+                output=self.dp(classificationOut)
+            else:
+                output = classificationOut
+            # print('BERTed2\t' + str(np.shape(output)))
+            x = self.fc_action(output)
+            # print('output\t' + str(np.shape(x)))
+            # print(np.shape(x))
+            return x, input_vectors, sequenceOut, maskSample
 
-    def __getitem__(self, index):
-        img = Image.open(self.img_path[index])
+    def eval(self)
+        self.eval = True
 
-        if self.transform is not None:
-            img = self.transform(img)
-
-        return img, self.img_path[index]
-
-    def __len__(self):
-        return len(self.img_path)
-
-
-def normalize(x, copy = False):
-    """
-    A helper function that wraps the function of the same name in sklearn.
-    This helper handles the case of a single column vector.
-    """
-    if type(x) == np.ndarray and len(x.shape) == 1:
-        return np.squeeze(sknormalize(x.reshape(1, -1), copy = copy))
-        #return np.squeeze(x / np.sqrt((x ** 2).sum(-1))[..., np.newaxis])
-    else:
-        return sknormalize(x, copy = copy)
-        #return x / np.sqrt((x ** 2).sum(-1))[..., np.newaxis]
-
-
-def my_squeeze(arr):
-    # print(np.shape(arr))
-    # arr = arr.squeeze(4)
-    # arr = arr.squeeze(3)
-    # arr = arr.squeeze(0)
-    arr = arr.squeeze()
-    # print(np.shape(arr))
-    return arr
-
-
-class Img2Vec():
-    def __init__(self, model='i3d', layer='default', layer_output_size=512):
-        # self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        if model == "i3d":
-            self.model = rgb_I3D64f().to(device)
-        elif model == "vgg16":
-            self.model = vgg.vgg16.to(device)
-        elif  model == "bert":
-            self.model = rgb_I3D64f_bert2().to(device)
-            # take the bottom layer out
-        else:
-            print("What")
-        self.model.eval()
-        self.transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ])
-
-    def run(self, path):
-        if not isinstance(path, list):
-            path = [path]
-
-        data_loader = torch.utils.data.DataLoader(QRDataset(path, self.transform), batch_size = 64,
-                                                  shuffle = False, num_workers = 16)
-
-        my_embedding = None
-
-        with torch.no_grad():
-            for index, batch_data in enumerate(data_loader):
-                batch_data = batch_data[0].unsqueeze(0).transpose(1,2).to(device)
-                # print(batch_data)
-                # print("input shape:")
-                # print(np.shape(batch_data))
-                output = self.model(batch_data)
-                # print("output shape:")
-                # print(np.shape(output))
-                if my_embedding is not None:
-                	my_embedding = torch.cat((my_embedding, output), 2)
-                else:
-                    my_embedding = output
-        # my_embedding = output
-        # print(my_embedding)
-        # print("Final output shape:\t")
-        # print(np.shape(my_embedding))
-        return my_embedding
-
-
-def frame_extract(inpath, outpath, fps):
-    if not os.path.exists(outpath):
-        os.mkdir(outpath)
-    cmd = "ffmpeg -loglevel quiet -stats -i " + inpath + " -r " + str(fps) + " " + outpath + "frame%04d.jpg"
-    # print(cmd)
-    os.system(cmd)
-
-
-def feature_extract(model, inpath):
-    q = []
-    for img in os.listdir(inpath):
-        q.append(inpath + img)
-    q.sort(key = lambda x: x.lower())
-    print("feature extract:\tFrame_num:\t" + str(len(q)))
-
-    x = model.run(q)
-    x = my_squeeze(x)
-    x = normalize(x.cpu())
-    return x
-
-
-def vid2vec(model, path, temp_path="./temp/"):
-    if not os.path.exists(temp_path):
-        os.mkdir(temp_path)
-    # extract frame
-    frame_extract(path, temp_path, 8)
-    # feature_num = len(os.listdir(temp_path))
-    # pass the path of said
-    feature = feature_extract(model, temp_path)
-    # print(np.shape(feature))
-    feature_num = np.shape(feature)[1]
-    # files = glob.glob("./temp/")
-    shutil.rmtree(temp_path)
-    return feature, feature_num
-
-
-print(sys.argv)
-script_name, weight_path, inpath, outpath = sys.argv
-
-img2vec = Img2Vec(model="bert")
-feature, feature_num = vid2vec(img2vec, inpath)
-with open(outpath, 'wb') as pk_file:
-    pickle.dump(feature, pk_file, protocol = 4)
+    def train(self)
+        self.eval = False
