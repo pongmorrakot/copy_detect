@@ -1,5 +1,7 @@
 # copy_detect
 
+extract_ActNet.py : functions to extract clip of videos from activityNet
+
 i3d.py : contains the i3d model
 
 i3dBERT.py : contains the i3d+BERT model
