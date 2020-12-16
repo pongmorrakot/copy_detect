@@ -24,10 +24,16 @@ class ANetDataset(Dataset):
         self.class_num = None
 
     def import_frame(self,path):
-        pass
+        q = []
+        for img in os.listdir(path):
+            q.append(inpath + img)
+        q.sort(key = lambda x: x.lower())
+        return q
 
     def target_gen(self, label):
-        pass
+        target = torch.zeros(self.class_num)
+        target[label] = 1.
+        return target
 
     def __getitem__(self, index):
         path, label = self.frame_entry[index]
