@@ -10,9 +10,9 @@ list_path = "/media/ubuntu/Elements/ActivityNet/video_reloc-master/data/train.js
 
 
 def cut_vid(vid_name, start_sec, end_sec, fps, out_name):
-    vid_path = root_path + vid_name
-    out_name = out_path + out_name
-    if not os.path.exist(out_name):
+    # vid_path = root_path + vid_name
+    # out_name = out_path + out_name
+    if not os.path.exists(out_name):
         os.mkdir(out_name)
     cmd = "ffmpeg -i {vid} -ss {start} -to {end} -r {fps} -async 1 {out_name}frame%04d.jpg"
     cmd = cmd.format(vid=vid_name, start=start_sec, end=end_sec, fps=fps, out_name=out_name)
@@ -108,10 +108,12 @@ def extract_vid(list_path, vid_path, out_path):
     entries = open(list_path,"r").readlines()
     for e in entries:
         out_name, vid_name, label, start, end = e.split()
-        cut_vid(vid_path+vid_name+".mp4", start, end, 8, out_path+out_name)
+        cut_vid(vid_path + "v_" + vid_name + ".mp4", start, end, 8, out_path+out_name+"/")
         print(vid_name + "\t extracted")
 
 
 def extract_all():
-    extract_vid(out_path+"_train_list.txt", root_path+"train/", out_path)
-    extract_vid(out_path+"_val_list.txt", root_path+"val/", out_path)
+    extract_vid(out_path+"_train_list.txt", root_path+"train_val/", out_path)
+    extract_vid(out_path+"_val_list.txt", root_path+"train_val/", out_path)
+
+extract_all()

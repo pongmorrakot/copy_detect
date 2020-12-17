@@ -621,14 +621,14 @@ class rgb_I3D64f(nn.Module):
 
 
 class rgb_I3D64f_bert2(nn.Module):
-    def __init__(self, modelPath='./weights/rgb_imagenet.pth', extract=True):
+    def __init__(self, num_classes, modelPath='./weights/rgb_imagenet.pth', extract=True):
         super(rgb_I3D64f_bert2, self).__init__()
         self.extract = True
         self.eval = True
         self.hidden_size=1024
         self.n_layers=1
         self.attn_heads=8
-        # self.num_classes=num_classes
+        self.num_classes=num_classes
         # self.length=length
         self.dp = nn.Dropout(p=0.8)
 
@@ -680,8 +680,8 @@ class rgb_I3D64f_bert2(nn.Module):
             # print(np.shape(x))
             return x, input_vectors, sequenceOut, maskSample
 
-    def eval(self)
+    def eval(self):
         self.eval = True
 
-    def train(self)
+    def train(self):
         self.eval = False
